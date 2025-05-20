@@ -5,9 +5,14 @@ import config from './src/utils/config.js';
 import logger from './src/utils/log.js';
 import mongoInit from './src/models/init.js';
 import './cronJobs/resetFreeRides.js'
+import './cronJobs/cancelExpiredRide.js'
+import {initSocketIO} from "./socket.js";
+
 
 const log = logger('server');
 const server = http.createServer(app);
+
+initSocketIO(server)
 
 process.on('uncaughtException', (err) => {
   log.fatal({ err }, `Unhandled exception ${err}`);
@@ -21,7 +26,7 @@ process.on('unhandledRejection', (reason) => {
 const main = async () => {
   await mongoInit(config.DATABASE_URL);
   log.info(`Listening on 0.0.0.0:${config.PORT}`);
-  await server.listen(config.PORT);
+  await server.listen(config.PORT,'0.0.0.0');
 };
 
 main();

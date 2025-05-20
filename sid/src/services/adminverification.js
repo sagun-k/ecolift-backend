@@ -1,5 +1,8 @@
 import AdminVerification from '../models/adminverification.js';
 import DatabaseError from '../models/error.js';
+import mongoose from "mongoose";
+import nodemailer from "nodemailer";
+import Driver from "../models/driver.js";
 
 class AdminVerificationService {
   static async list() {
@@ -17,6 +20,42 @@ class AdminVerificationService {
       throw new DatabaseError(err);
     }
   }
+
+  static async sendRejectionEmail(driverId) {
+    const transporter = nodemailer.createTransport({
+      service: process.env.SMTP_SERVICE,
+      auth: {
+        user: process.env.SMTP_MAIL,
+        pass: process.env.SMTP_PASS
+      }
+    });
+
+    const driver = await Driver.findOne({ _id:driverId }).populate("user").exec();
+    const mailOptions = {
+      from: process.env.SMTP_MAIL,
+      to: driver.user.email,
+      subject: 'Driver Rejected',
+      text: `You are rejected to be a driver. Please contact the support email ecolift@gmail.com!!`
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log('Verification email sent to:', email);
+    } catch (error) {
+      console.error('Error sending verification email:', error);
+    }
+  }
+
+
+  static async getByDriver(id) {
+    try {
+      const objectId = new mongoose.Types.ObjectId(id);
+      return await AdminVerification.findOne({ driver: objectId }).exec();
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
+
 
   static async create(data) {
     try {

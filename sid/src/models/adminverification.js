@@ -15,6 +15,7 @@ const schema = new mongoose.Schema({
   },
   verifiedAt: {
     type: Date,
+    default: Date.now,
   },
 }, {
   versionKey: false,

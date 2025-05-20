@@ -7,7 +7,7 @@ const schema = new mongoose.Schema({
     type: mongoose.ObjectId,
     required: true,
     unique: true,
-    ref: 'UserProfile',
+    ref: 'User',
   },
   vehicleDetails: {
     type: String,
@@ -26,6 +26,11 @@ const schema = new mongoose.Schema({
     default: false,
     required: true,
   },
+  availableStatus:{
+    type: String,
+    enum: ['available', 'booked', 'offline'],
+    default: 'available'
+  }
 }, {
   versionKey: false,
 });
@@ -34,6 +39,15 @@ schema.post('save', handleDuplicateKeyError);
 schema.post('update', handleDuplicateKeyError);
 schema.post('findOneAndUpdate', handleDuplicateKeyError);
 schema.post('insertMany', handleDuplicateKeyError);
+schema.virtual('adminVerification', {
+  ref: 'AdminVerification',
+  localField: '_id',
+  foreignField: 'driver',
+  justOne: true, // if one-to-one
+});
+
+schema.set('toObject', { virtuals: true });
+schema.set('toJSON', { virtuals: true });
 
 const Driver = mongoose.model('Driver', schema);
 

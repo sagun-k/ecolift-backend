@@ -3,10 +3,13 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import User from '../models/user.js';
-import UserDto from "../api/dto/UserDto.js"
 import DatabaseError from '../models/error.js';
 import { generatePasswordHash, validatePassword } from '../utils/password.js';
 import nodemailer from 'nodemailer';
+import DriverService from "./driver.js";
+import AdminVerificationService from "./adminverification.js";
+import UserProfile from "../models/userprofile.js";
+import UserProfileService from "./userprofile.js";
 
 const generateRandomToken = () => randomBytes(48).toString('base64').replace(/[+/]/g, '.');
 dotenv.config();
@@ -52,11 +55,30 @@ class UserService {
       throw new DatabaseError(err);
     }
   }
+  
+  static async checkIfUserIsApproved(userId) {
+     const driver = await DriverService.getByUser(userId)
+    if (!driver) {
+      throw  new Error("User not found");
+    }
+    const verifiedDriver = await AdminVerificationService.getByDriver(driver._id);
+    if(verifiedDriver == null){
+      throw new Error("You are not verified driver yet. Please contact support team!!!")
+    }
+    const isAdminVerified = verifiedDriver?.status === "Approved"
+     if(isAdminVerified) return;
+    throw new Error("You are not verified driver yet. Please contact support team!!!")
+
+  }
 
   static async authenticateWithPassword(email, password) {
     try {
       const user = await User.findOne({ email }).exec();
       if (!user) return null;
+      if(user.role === 'Driver')
+      {
+        await this.checkIfUserIsApproved(user._id)
+      }
 
       const passwordValid = await validatePassword(password, user.password);
 
@@ -66,7 +88,7 @@ class UserService {
       const updatedUser = await user.save();
       return updatedUser;
     } catch (err) {
-      throw new DatabaseError(err);
+      throw new Error(err);
     }
   }
 
@@ -101,7 +123,12 @@ class UserService {
 
       await UserService.sendVerificationEmail(user.email, verificationCode);
       console.log('User created:', user); // Log after creation
-      return { user, token };
+      return {
+        user: {
+          ...user.toObject(),
+          id: user._id.toString(), // Add this line to expose `id`
+        },
+        token };
     } catch (err) {
       console.error('Error in user creation:', err); // Log detailed error
       throw new DatabaseError(err);
@@ -165,6 +192,7 @@ class UserService {
       if (user.verificationCode === code) {
         user.isVerified = true;
         user.verificationCode = null;
+        await  UserProfileService.create({user:user._id})
         await user.save();
         return { success: true, message: 'User verified successfully' };
       } else {
@@ -189,13 +217,26 @@ class UserService {
     try {
       // Fetch users with only the needed fields: email, role, name
       const users = await User.find({}).exec();
+      const userProfiles = await UserProfileService.list();
 
-      // Convert each user to a UserDto and return an array of DTOs
-      return users.map(user => UserDto.toResponseDto(user));
+      const usersWithProfiles = [];
+
+      users.forEach(user => {
+        const matchedProfile = userProfiles.find(profile => String(profile.user) === String(user._id));
+
+        usersWithProfiles.push({
+          ...user.toObject(),
+          userProfile: matchedProfile ?? null
+        });
+      });
+
+      return usersWithProfiles;
     } catch (err) {
       throw new DatabaseError(err);
     }
   }
+
+
 }
 
 export default UserService;

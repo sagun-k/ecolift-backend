@@ -13,7 +13,7 @@ export async function checkFreeRides(req, res, next) {
     }
 
     // Deduct 1 from freeRidesRemaining
-    userProfile.freeRidesRemaining -= 1;
+    // userProfile.freeRidesRemaining -= 1;
     await userProfile.save();
 
     next();

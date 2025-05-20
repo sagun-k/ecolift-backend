@@ -49,7 +49,7 @@ router.use(urls.apiPrefix + urls.subscription.path, authorize(), subscriptionRou
 // Normal, Premium, and Admin roles: Accessible routes
 router.use(urls.apiPrefix + urls.userProfile.path, authorize(), userProfileRouter);
 router.use(urls.apiPrefix + urls.rideHistory.path, authorize(), rideHistoryRouter);
-router.use(urls.apiPrefix + urls.ride.path, authorize(),checkFreeRides, rideRouter);
+router.use(urls.apiPrefix + urls.ride.path, authorize(), rideRouter);
 router.use(urls.apiPrefix + urls.driver.path, authorize(), driverRouter);
 router.use(urls.apiPrefix + urls.advertisment.path, authorize(), advertismentRouter);
 router.use(urls.apiPrefix + urls.usersAll.path, authorize(), adminRouter);

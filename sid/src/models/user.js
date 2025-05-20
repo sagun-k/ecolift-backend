@@ -35,12 +35,6 @@ const schema = new mongoose.Schema({
     default: 'Normal', // Default role is 'Normal'
     maxLength: 10,
   },
-  phone: {
-    type: String,
-    required: true,
-    maxLength: 10,
-    minLength:10
-  },
   name: {
     type: String,
   },
@@ -73,7 +67,6 @@ const schema = new mongoose.Schema({
 schema.set('toJSON', {
   /* eslint-disable */
   transform: (doc, ret, options) => {
-    delete ret._id;
     delete ret.password;
     return ret;
   },

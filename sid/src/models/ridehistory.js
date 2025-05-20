@@ -9,10 +9,9 @@ const schema = new mongoose.Schema({
     unique: true,
     ref: 'Ride',
   },
-  user: {
+  userProfile: {
     type: mongoose.ObjectId,
     required: true,
-    unique: true,
     ref: 'UserProfile',
   },
   dateTaken: {

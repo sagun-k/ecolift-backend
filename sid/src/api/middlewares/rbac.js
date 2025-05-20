@@ -5,6 +5,8 @@ const permissions = {
     'user-profile:post',
     'ride-history:get',
     'ride:post',
+      'ride:put',
+      'ride:get',
     'driver:get',
     'advertisment:get'
   ],
@@ -12,6 +14,8 @@ const permissions = {
     'user-profile:post',
     'ride-history:get',
     'ride:post',
+    'ride:get',
+    'ride:put',
     'driver:get',
     'advertisment:get'
   ],
@@ -19,7 +23,10 @@ const permissions = {
     'user-profile:post',
     'ride-history:get',
     'ride:post',
+    'ride:put',
+    'ride:get',
     'driver:get',
+    'driver:post',
     'advertisment:get',
     'redeempoints-history:get'
   ],

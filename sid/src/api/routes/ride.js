@@ -4,6 +4,8 @@ import RideService from '../../services/ride.js';
 import { requireUser } from '../middlewares/auth.js';
 import { requireSchema, requireValidId } from '../middlewares/validate.js';
 import schema from '../schemas/ride.js';
+import UserProfileService from "../../services/userprofile.js";
+import UserService from "../../services/user.js";
 
 const router = Router();
 
@@ -44,6 +46,35 @@ router.get('', async (req, res, next) => {
   }
 });
 
+router.get('/user/:id', async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const results = await RideService.listByUser(userId);
+    res.json(results);
+  } catch (error) {
+    if (error.isClientError()) {
+      res.status(400).json({ error });
+    } else {
+      next(error);
+    }
+  }
+});
+
+
+router.get('/driver/:driverUserId', async (req, res, next) => {
+  try {
+    const driverUserId = req.params.driverUserId;
+    const results = await RideService.listByDriver(driverUserId);
+    res.json(results);
+  } catch (error) {
+    if (error.isClientError()) {
+      res.status(400).json({ error });
+    } else {
+      next(error);
+    }
+  }
+});
+
 /** @swagger
  *
  * /ride:
@@ -66,9 +97,18 @@ router.get('', async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Ride'
  */
-router.post('', requireSchema(schema), async (req, res, next) => {
+router.post('', async (req, res, next) => {
   try {
-    const obj = await RideService.create(req.validatedBody);
+    const userProfile = await UserProfileService.getByUser(req.body.user)
+    if(userProfile === null)
+    {
+      res.status(404).json("USer not found")
+    }
+    req.body = {
+      ...req.body,
+      userProfile: userProfile._id
+    }
+    const obj = await RideService.create(req.body);
     res.status(201).json(obj);
   } catch (error) {
     if (error.isClientError()) {
@@ -197,5 +237,75 @@ router.delete('/:id', requireValidId, async (req, res, next) => {
     }
   }
 });
+
+router.post('/:id/accept', async (req, res, next) => {
+  try {
+    const rideId = req.params.id;
+    const driverUserId = req.body.driverUserId;
+    await RideService.accept(rideId, driverUserId);
+    res.status(200).json({"message":"RIde accepted successfully"});
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/request', async (req, res, next) => {
+  try {
+    const rideId = req.params.id;
+    const driverId = req.body.driverId;
+    await RideService.requestRide(rideId, driverId);
+    res.status(200).json({"message":"RIde requested successfully"});
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/cancel', async (req, res, next) => {
+  try {
+    const rideId = req.params.id;
+    const updated = await RideService.cancel(rideId);
+    if (!updated) {
+      return res.status(404).json({ message: 'Ride not found' });
+    }
+
+    res.status(200).json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/complete', async (req, res, next) => {
+  try {
+    const rideId = req.params.id;
+    const driverUserId = req.body.driverUserId;
+    const updated = await RideService.complete(rideId, driverUserId);
+    if (!updated) {
+      return res.status(404).json({ message: 'Ride not found' });
+    }
+
+    res.status(200).json(updated);
+  } catch (err) {
+    res.status(500).json({"error":err.toString()})
+    next(err);
+  }
+});
+
+router.post('all-cancel', async (req, res, next) => {
+  try {
+    const userId = req.body.id;
+    const updated = await RideService.cancelAllByUser(userId);
+    if (!updated) {
+      return res.status(404).json({ message: 'user not found' });
+    }
+
+    res.status(200).json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+
+
 
 export default router;

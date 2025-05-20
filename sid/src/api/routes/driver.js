@@ -4,6 +4,7 @@ import DriverService from '../../services/driver.js';
 import { requireUser } from '../middlewares/auth.js';
 import { requireSchema, requireValidId } from '../middlewares/validate.js';
 import schema from '../schemas/driver.js';
+import upload from "../middlewares/upload.js";
 
 const router = Router();
 
@@ -44,6 +45,7 @@ router.get('', async (req, res, next) => {
   }
 });
 
+
 /** @swagger
  *
  * /driver:
@@ -66,18 +68,36 @@ router.get('', async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/Driver'
  */
-router.post('', requireSchema(schema), async (req, res, next) => {
-  try {
-    const obj = await DriverService.create(req.validatedBody);
-    res.status(201).json(obj);
-  } catch (error) {
-    if (error.isClientError()) {
-      res.status(400).json({ error });
-    } else {
-      next(error);
+router.post(
+    '',
+    upload.fields([
+      { name: 'licenseImage', maxCount: 1 },
+      { name: 'bluebookImage', maxCount: 1 },
+    ]),
+    async (req, res, next) => {
+      try {
+        const { body, files } = req;
+
+        if (!body.user || !body.vehicleDetails || !files.licenseImage || !files.bluebookImage) {
+          return res.status(400).json({ error: 'Missing required fields or files.' });
+        }
+
+        const driverData = {
+          user: body.user,
+          vehicleDetails: body.vehicleDetails,
+          licenseImage: files.licenseImage[0].path,
+          bluebookImage: files.bluebookImage[0].path,
+          isVerified: false,
+        };
+
+        const createdDriver = await DriverService.create(driverData);
+        res.status(201).json(createdDriver);
+      } catch (error) {
+        console.error(error);
+        next(error);
+      }
     }
-  }
-});
+);
 
 /** @swagger
  *
@@ -182,6 +202,23 @@ router.put('/:id', requireValidId, requireSchema(schema), async (req, res, next)
  *        description: OK, object deleted
  */
 router.delete('/:id', requireValidId, async (req, res, next) => {
+  try {
+    const success = await DriverService.delete(req.params.id);
+    if (success) {
+      res.status(204).send();
+    } else {
+      res.status(404).json({ error: 'Not found, nothing deleted' });
+    }
+  } catch (error) {
+    if (error.isClientError()) {
+      res.status(400).json({ error });
+    } else {
+      next(error);
+    }
+  }
+});
+
+router.post('/vehicle', requireValidId, async (req, res, next) => {
   try {
     const success = await DriverService.delete(req.params.id);
     if (success) {

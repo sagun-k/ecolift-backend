@@ -12,6 +12,7 @@ import {
 } from '../schemas/auth.js';
 import upload from '../middlewares/upload.js';
 import saveImageFromUrl from '../../utils/image.js';
+import UserProfileService from "../../services/userprofile.js";
 const router = Router();
 
 /** @swagger
@@ -42,38 +43,42 @@ const router = Router();
  */
 
 router.post(urls.auth.login, requireSchema(loginSchema), async (req, res) => {
-  const { email, password } = req.validatedBody;
+  try{
+    const { email, password } = req.validatedBody;
 
-  const user = await UserService.authenticateWithPassword(email, password);
-  if (user) {
-    const token = UserService.generateToken(user);
 
-    // Convert Mongoose document to plain object
-    const userData = user.toObject();
+    const user = await UserService.authenticateWithPassword(email, password);
+    if (user) {
+      const token = UserService.generateToken(user);const userProfile = await UserProfileService.getByUser(user._id);
 
-    res.json({
-      token,
-      user: {
-        _id: userData._id,
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-        createdAt: userData.createdAt,
-        lastLoginAt: userData.lastLoginAt,
-        isActive: userData.isActive,
-        profilepicture: userData.profilepicture,
-        phone: userData.phone
-      }
-    });
-  } else {
-    res.status(401).json({ error: 'Authentication failed' });
+      // Convert Mongoose document to plain object
+      const userData = user.toObject();
+
+      res.json({
+        token,
+        user: {
+          _id: userData._id,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          createdAt: userData.createdAt,
+          lastLoginAt: userData.lastLoginAt,
+          isActive: userData.isActive,
+          profilepicture: userData.profilepicture,
+          phonenumber: userData.phonenumber,
+          isPremium:userProfile?.isPremium ?? null,
+          freeRidesRemaining:userProfile?.freeRidesRemaining ?? 0
+        }
+      });
+    } else {
+      res.status(401).json({ error: 'Authentication failed' });
+    }
+  }catch (err){
+    res.status(500).json({error:err.toString()})
   }
+ 
 });
 
-
-router.get(urls.auth.login, (req, res) => {
-  res.status(405).json({ error: 'Login with POST instead' });
-});
 
 /**
  * @swagger

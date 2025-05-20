@@ -18,6 +18,14 @@ class UserProfileService {
     }
   }
 
+  static async getByUser(id) {
+    try {
+      return await UserProfile.findOne({ user: id }).exec();
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
+
   static async create(data) {
     try {
       data.freeRidesRemaining = data.isPremium ? 3 : 1;
@@ -37,6 +45,8 @@ class UserProfileService {
       throw new DatabaseError(err);
     }
   }
+  
+  
 
   static async delete(id) {
     try {

@@ -1,18 +1,88 @@
-import Ride from '../models/ride.js';
+import Ride, {RIDE_STATUSES} from '../models/ride.js';
 import DatabaseError from '../models/error.js';
-
+import UserProfileService from "./userprofile.js";
+import {getConnectedUsers, getIO} from "../../socket.js";
+import DriverService from "./driver.js";
+import RideHistoryService from "./ridehistory.js";
+import UserService from "./user.js";
 class RideService {
   static async list() {
     try {
-      return Ride.find();
+      return Ride.find()
+          .populate({
+            path: 'userProfile', // Ride.user refers to UserProfile
+            populate: {
+              path: 'user', // UserProfile.user refers to User
+              model: 'User',
+            },
+          })
+          .populate('driver');
     } catch (err) {
       throw new DatabaseError(err);
     }
   }
 
+  static async listByUser(userId) {
+    try {
+      const rides = await Ride.find()
+          .populate({
+            path: 'userProfile',
+            populate: {
+              path: 'user',
+              model: 'User',
+            },
+          })
+          .populate('driver');
+
+      // Filter rides based on userProfile.user._id
+      const userRides = rides.filter(ride =>
+          ride.userProfile &&
+          ride.userProfile.user &&
+          ride.userProfile.user._id.toString() === userId.toString()
+      );
+
+      return userRides;
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
+
+  static async listByDriver(driverUserId) {
+    try {
+      const rides = await Ride.find()
+          .populate({
+            path: 'userProfile',
+            populate: {
+              path: 'user',
+              model: 'User',
+            },
+          })
+          .populate(
+              {
+                path:'driver',
+                populate:{
+                  path:'user',
+                  model:"User"
+                }
+              });
+
+      // Filter rides based on userProfile.user._id
+      const driverRides = rides.filter(ride =>
+          ride.driver &&
+          ride.driver.user &&
+          ride.driver.user._id.toString() === driverUserId.toString()
+      );
+      return driverRides;
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
+
+
+
   static async get(id) {
     try {
-      return await Ride.findOne({ _id: id }).exec();
+      return await Ride.findOne({ _id: id }).populate('driver').exec();
     } catch (err) {
       throw new DatabaseError(err);
     }
@@ -44,6 +114,191 @@ class RideService {
       throw new DatabaseError(err);
     }
   }
+  
+  static async accept(id, driverUserId) {
+    try{
+        if(!driverUserId){
+            throw new Error("Driver is required");
+        }
+        const ride = await Ride.findOne({_id:id});
+        const userProfile = await UserProfileService.get(ride.userProfile);
+        if(userProfile.freeRidesRemaining > 0){
+              await UserProfileService.update(userProfile._id, {freeRidesRemaining: userProfile.freeRidesRemaining-1})
+        }
+        const userId = userProfile.user.toString();
+      const connectedUsers = getConnectedUsers();
+      const io = getIO();
+      const socketId = connectedUsers.get(userId);
+      const driver = await DriverService.getByUser(driverUserId);
+        
+       const updated =  await Ride.findOneAndUpdate(
+          { _id: id, status: RIDE_STATUSES.REQUESTED },
+          { status: RIDE_STATUSES.ACCEPTED, driver: driver._id },
+          { new: true }
+      );
+      if (socketId) {
+        io.to(socketId).emit('rideAccepted', {
+          rideId: ride._id,
+          message: 'Your ride request has been accepted!',
+          driverId:driver._id,
+        });
+        console.log(`Notified user ${userId}`);
+      }
+      return updated;
+    } catch(err){
+      throw new Error(err);
+    }
+  }
+  
+  static  async requestRide(id, driverId){
+    try {
+      const ride = await Ride.findOne({_id:id}).populate({
+        path: 'userProfile',
+        populate: {
+          path: 'user',
+          model: 'User',
+        },
+      }).exec();
+      const driver = await DriverService.get(driverId)
+      const driverUserId = driver.user._id.toString();
+      const connectedUsers = getConnectedUsers();
+      const io = getIO();
+      const socketId = connectedUsers.get(driverUserId);
+      // Emit a socket event to the driver (assuming room or socketId is driverId)
+      if(socketId){
+        io.to(socketId).emit('rideRequested', {
+          ride: ride,
+          message: 'Your ride has been requested!'
+        });
+        console.log(`Ride request sent to driver ${driverId} for ride ${ride._id}`);
+      }
+
+    } catch (err) {
+      console.error('Error sending ride request via socket:', err);
+      throw err;
+    }
+  }
+
+  static async cancel(id, driverId) {
+    try {
+      if (!driverId) {
+        throw new Error("Driver ID is required"); // More specific error
+      }
+
+      const ride = await Ride.findOne({ _id: id });
+      if (!ride) {
+        throw new Error("Ride not found");
+      }
+
+      //Check for the ride status and driver
+      if(ride.status === RIDE_STATUSES.COMPLETED){
+        throw new Error("Cannot cancel a completed ride");
+      }
+
+      if (ride.driver && ride.driver.toString() !== driverId) {
+        throw new Error("Cannot cancel a ride assigned to another driver");
+      }
+      const userProfile = await UserProfileService.get(ride.userProfile);
+      const userId = userProfile.user.toString();
+      const io = getIO();
+      const connectedUsers = getConnectedUsers();
+      const socketId = connectedUsers.get(userId);
+
+
+
+      const updatedRide = await Ride.findOneAndUpdate(
+          { _id: id, status: { $in: [RIDE_STATUSES.REQUESTED, RIDE_STATUSES.ACCEPTED] } }, // Allow cancel from REQUESTED or ACCEPTED
+          { status: RIDE_STATUSES.CANCELED },
+          { new: true }
+      );
+
+      if (!updatedRide) {
+        throw new Error("Ride cancellation failed. Invalid ride status.");
+      }
+
+      if (socketId) {
+        io.to(socketId).emit('rideCancelled', {  // Corrected event name to 'rideCancelled'
+          rideId: ride._id,
+          message: 'Your ride has been cancelled.', // improved message.
+        });
+        console.log(`Notified user ${userId}`);
+      }
+      return updatedRide;
+    } catch (err) {
+      throw new Error(err); // Re-throw for centralized handling
+    }
+  }
+
+
+  static async cancelAllByUser(userId) {
+    try {
+      return await Ride.updateMany(
+          {
+            user: userId,
+            status: RIDE_STATUSES.REQUESTED,
+          },
+          {
+            $set: { status: RIDE_STATUSES.CANCELED },
+          }
+      );
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
+  
+  
+
+  static async complete(id, driverUserId) {
+    try {
+      if (!driverUserId) {
+        throw new Error("Driver is required");
+      }
+      const ride = await Ride.findOne({ _id: id }); // Ensure driver matches
+      if (!ride) {
+        throw new Error("Ride not found or not assigned to this driver");
+      }
+
+      const userUserProfile = await UserProfileService.get(ride.userProfile);
+      const userId = userUserProfile.user.toString();  // Get user ID as string
+      const io = getIO();
+      const connectedUsers = getConnectedUsers();
+      const socketId = connectedUsers.get(userId);
+      const driver = await DriverService.getByUser(driverUserId);
+      const driverUserProfile = await UserProfileService.getByUser(driver.user);
+
+      const updatedRide = await Ride.findOneAndUpdate(
+          { _id: id, status: RIDE_STATUSES.ACCEPTED, driver:driver._id}, // Added driver check
+          { status: RIDE_STATUSES.COMPLETED },
+          { new: true }
+      );
+
+      if (!updatedRide) {
+        throw new Error("Ride completion failed.  Incorrect status or driver.");
+      }
+      const userProfileUpdateData = {
+        redeemPoints:userUserProfile.redeemPoints + Math.ceil(updatedRide.distance)
+      }
+      const driverProfileUpdateData = {
+        redeemPoints:driverUserProfile.redeemPoints + Math.ceil(updatedRide.distance)
+      }
+      await UserProfileService.update(userUserProfile._id, userProfileUpdateData);
+      await UserProfileService.update(driverUserProfile._id, driverProfileUpdateData);
+      if (socketId) {
+        io.to(socketId).emit('rideCompleted', { // Changed event name
+          rideId: ride._id,
+          message: `Ride has been completed, Succesfully earned ${updatedRide.distance} reedem points`
+        });
+        
+        console.log(`Notified user ${userId}`);
+      }
+      return updatedRide;
+    } catch (err) {
+      throw new Error(err); // Re-throw the error for centralized handling
+    }
+  }
+
+
 }
+
 
 export default RideService;

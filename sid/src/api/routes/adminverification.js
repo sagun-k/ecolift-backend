@@ -69,6 +69,10 @@ router.get('', async (req, res, next) => {
 router.post('', requireSchema(schema), async (req, res, next) => {
   try {
     const obj = await AdminVerificationService.create(req.validatedBody);
+    if(req.body.status == "Rejected")
+    {
+      await AdminVerificationService.sendRejectionEmail(req.body.driver);
+    }
     res.status(201).json(obj);
   } catch (error) {
     if (error.isClientError()) {

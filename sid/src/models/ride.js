@@ -2,8 +2,17 @@ import mongoose from 'mongoose';
 
 import { handleDuplicateKeyError } from './error.js';
 
+// Status values could be:
+export const RIDE_STATUSES = {
+  REQUESTED: 'requested', // when user books
+  ACCEPTED: 'accepted',   // when driver accepts
+  COMPLETED: 'completed',
+  CANCELED: 'canceled'
+};
+
+
 const schema = new mongoose.Schema({
-  user: {
+  userProfile: {
     type: mongoose.ObjectId,
     required: true,
     ref: 'UserProfile',
@@ -17,11 +26,6 @@ const schema = new mongoose.Schema({
     type: String,
     required: true,
     maxLength: 255,
-  },
-  status: {
-    type: String,
-    required: true,
-    maxLength: 20,
   },
   distance: {
     type: Number,
@@ -43,9 +47,21 @@ const schema = new mongoose.Schema({
       message: 'An integer is required',
     },
   },
+  status: {
+    type: String,
+    required: true,
+    enum: ['requested', 'accepted', 'completed', 'canceled'],
+    default: 'requested'
+  },
+
   driver: {
     type: mongoose.ObjectId,
     ref: 'Driver',
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default:new Date()
   },
 }, {
   versionKey: false,
