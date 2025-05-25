@@ -5,6 +5,7 @@ import {getConnectedUsers, getIO} from "../../socket.js";
 import DriverService from "./driver.js";
 import RideHistoryService from "./ridehistory.js";
 import UserService from "./user.js";
+import IgnoredRides from "../models/ignoredrides.js";
 class RideService {
   static async list() {
     try {
@@ -82,7 +83,13 @@ class RideService {
 
   static async get(id) {
     try {
-      return await Ride.findOne({ _id: id }).populate('driver').exec();
+      return await Ride.findOne({ _id: id }).populate({
+        path: 'userProfile', // Ride.user refers to UserProfile
+        populate: {
+          path: 'user', // UserProfile.user refers to User
+          model: 'User',
+        },
+      }).populate('driver').exec();
     } catch (err) {
       throw new DatabaseError(err);
     }
@@ -266,8 +273,9 @@ class RideService {
       const driver = await DriverService.getByUser(driverUserId);
       const driverUserProfile = await UserProfileService.getByUser(driver.user);
 
+      const driverId = driver._id.toString()
       const updatedRide = await Ride.findOneAndUpdate(
-          { _id: id, status: RIDE_STATUSES.ACCEPTED, driver:driver._id}, // Added driver check
+          { _id: id, status: RIDE_STATUSES.ACCEPTED, driver:driverId}, // Added driver check
           { status: RIDE_STATUSES.COMPLETED },
           { new: true }
       );
@@ -296,7 +304,37 @@ class RideService {
       throw new Error(err); // Re-throw the error for centralized handling
     }
   }
+  
+  static  async ignoreRide(rideId, driverUserId){
+    try {
+      const driver = await  DriverService.getByUser(driverUserId);
+      if(!driver){
+        throw new Error("Driver not found")
+      }
+      const data ={
+        ride:rideId, 
+        driver:driver._id
+      }
+      const obj = new IgnoredRides(data);
+      await obj.save();
+      return obj;
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
 
+  static  async getIgnoredRides(driverUserId){
+    try {
+      const driver = await  DriverService.getByUser(driverUserId);
+      if(!driver){
+        throw new Error("Driver not found")
+      }
+      const ignoredRides = await IgnoredRides.find({ driver: driver._id });
+      return ignoredRides;
+    } catch (err) {
+      throw new DatabaseError(err);
+    }
+  }
 
 }
 

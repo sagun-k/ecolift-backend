@@ -246,14 +246,14 @@ router.post('/:id/accept', async (req, res, next) => {
     res.status(200).json({"message":"RIde accepted successfully"});
   } catch (err) {
     next(err);
-  }
+}
 });
 
 router.post('/:id/request', async (req, res, next) => {
   try {
     const rideId = req.params.id;
     const driverId = req.body.driverId;
-    await RideService.requestRide(rideId, driverId);
+    await RideService.requestRide(rideId, driverId);ex
     res.status(200).json({"message":"RIde requested successfully"});
   } catch (err) {
     next(err);
@@ -298,6 +298,28 @@ router.post('all-cancel', async (req, res, next) => {
       return res.status(404).json({ message: 'user not found' });
     }
 
+    res.status(200).json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+router.post('/:id/ignore', async (req, res, next) => {
+  try {
+    const rideId = req.params.id
+    const driverUserId = req.body.driverUserId;
+    const updated = await RideService.ignoreRide(rideId, driverUserId);
+    res.status(200).json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/ignore/driver/:id', async (req, res, next) => {
+  try {
+    const driverUserId = req.params.id
+    const updated = await RideService.getIgnoredRides(driverUserId);
     res.status(200).json(updated);
   } catch (err) {
     next(err);
